@@ -1,0 +1,22 @@
+[Unit]
+Description=Trendline Breakout Alert Bot (Binance USDT-PERP)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/trendline-breakout-bot
+EnvironmentFile=/home/ubuntu/trendline-breakout-bot/.env
+ExecStart=/home/ubuntu/trendline-breakout-bot/.venv/bin/python -m src.main
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+# 안전 옵션
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
