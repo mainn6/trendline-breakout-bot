@@ -26,3 +26,18 @@ def classify(line: Trendline) -> str:
     if abs(line.slope_pct) <= FLAT_THRESHOLD:
         return "📦 박스권 돌파"
     return "⚡ 상승 저항 돌파"
+
+
+def classify_en(line: Trendline) -> str:
+    if line.slope_pct < -FLAT_THRESHOLD:
+        return "Downtrend Break"
+    if abs(line.slope_pct) <= FLAT_THRESHOLD:
+        return "Range Break"
+    return "Rising Resistance Break"
+
+
+STAGE_LABEL_EN = {
+    "attempt": "ATTEMPT",
+    "holding": "HOLDING",
+    "confirmed": "CONFIRMED",
+}

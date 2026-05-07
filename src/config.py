@@ -11,7 +11,8 @@ class Config:
     MIN_SWING_DISTANCE: int = 5      # KAITO 같은 단기 라인도 잡기
     MAX_SWING_DISTANCE: int = 250
     MIN_BARS_AFTER_P2: int = 3
-    MAX_DISTANCE_FROM_LINE_PCT: float = 0.10   # 현재가가 라인에서 ±10% 안에 있는 라인만 추적
+    MAX_DISTANCE_FROM_LINE_PCT: float = 0.50   # ±50%까지 후보로 보되 가까울수록 우선
+    LENGTH_BONUS_WEIGHT: float = 2.0           # 긴 추세선 가중치 (length × 이 값)
 
     ATTEMPT_BREAKOUT_PCT: float = 0.005
     HOLDING_DURATION_MINUTES: int = 60

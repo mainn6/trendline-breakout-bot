@@ -40,10 +40,10 @@ def _evaluate(p1: SwingHigh, p2: SwingHigh, all_swings: list[SwingHigh],
         return None
 
     line_val_now = line_value_at(line, current_idx)
-    # 현재 시점 추세선 값이 비현실적이면 (음수/0) 제외
+    # 비현실적: 음수면 제외
     if line_val_now <= 0:
         return None
-    # 현재가가 추세선에서 너무 멀면 의미 없음 — 이미 돌파한 옛 추세선
+    # 현재가가 너무 멀면 reject (50%까지 허용)
     distance_pct = abs(current_close - line_val_now) / line_val_now
     if distance_pct > CFG.MAX_DISTANCE_FROM_LINE_PCT:
         return None
@@ -62,9 +62,10 @@ def _evaluate(p1: SwingHigh, p2: SwingHigh, all_swings: list[SwingHigh],
         elif rel > TOUCH_TOLERANCE:
             above += 1
 
-    # proximity 보너스: 현재가가 추세선에 가까울수록 +
-    proximity_bonus = (CFG.MAX_DISTANCE_FROM_LINE_PCT - distance_pct) * 1000
-    score = (2 + touches) * TOUCH_WEIGHT + distance - above * ABOVE_PENALTY + proximity_bonus
+    # 가까울수록 +, 길수록 + (긴 추세선이 의미 있음)
+    proximity_bonus = max(0.0, (0.10 - distance_pct)) * 800
+    length_bonus = distance * CFG.LENGTH_BONUS_WEIGHT
+    score = (2 + touches) * TOUCH_WEIGHT + length_bonus - above * ABOVE_PENALTY + proximity_bonus
     return TrendlineCandidate(
         line=line, score=score, touches=touches,
         length=distance, above_count=above,

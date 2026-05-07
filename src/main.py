@@ -4,7 +4,7 @@ from collections import defaultdict, deque
 
 from src.alert_db import AlertDB
 from src.binance_rest import BinanceRest
-from src.binance_ws import stream_klines
+from src.binance_poller import BinancePoller
 from src.config import CFG
 from src.models import StageState
 from src.state_machine import StateMachine
@@ -42,6 +42,7 @@ class Bot:
         self.sm = StateMachine()
         self.tm = TrendlineManager(self.rest, self.db)
         self.vol = VolumeTracker(window=CFG.VOLUME_AVG_WINDOW_MINUTES)
+        self.poller = BinancePoller()
 
     async def on_message(self, msg: dict) -> None:
         data = msg.get("data") or msg
@@ -97,9 +98,9 @@ class Bot:
         if not symbols:
             log.error("모니터링할 심볼이 없음 — 종료")
             return
-        log.info("WebSocket 시작: %d 심볼", len(symbols))
+        log.info("REST polling 시작: %d 심볼", len(symbols))
         await asyncio.gather(
-            stream_klines(symbols, self.on_message),
+            self.poller.poll_loop(symbols, self.on_message),
             self.tm.schedule_daily(self.sm),
         )
 
