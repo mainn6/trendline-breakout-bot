@@ -1,10 +1,13 @@
-"""추세선 자동 탐색 v2 — 모든 swing 쌍 평가 후 최적 1개 선택.
+"""추세선 자동 탐색 v4 — 모든 swing 쌍 평가 후 최적 1개 선택.
 
-점수 = (2 + touches) × TOUCH_WEIGHT + length_bonus − above_penalty
+점수 = (2 + touches) × TOUCH_WEIGHT + length × LENGTH_BONUS − above × ABOVE_PENALTY + proximity_bonus
 
-여기서 touches는 다른 swing high가 직선에 ±touch_tolerance 이내로 닿는 개수.
-저항선의 본질은 "여러 고점이 같은 직선 위에 늘어선" 패턴이므로 touches가 가장 강한 신호.
+v4 변경:
+  - SWING_LOOKBACK 5 → 3 (사용자 시각의 작은 swing도 포착)
+  - 추세선의 touches가 MIN_TOUCHES 미만이면 제외 (= 2점만 우연 매칭 거름)
+  - 가격 시계열의 linear regression R² < MIN_TREND_R2 면 제외 (= 횡보 코인 거름)
 """
+import statistics
 from dataclasses import dataclass
 from typing import Optional
 
@@ -12,6 +15,22 @@ from src.config import CFG
 from src.models import Candle, SwingHigh, Trendline
 from src.swing_detector import find_swing_highs
 from src.trendline import build_trendline, line_value_at
+
+
+def trend_r_squared(closes: list[float]) -> float:
+    """종가 시계열에 linear fit → R² (0~1, 1이 완벽 추세)."""
+    n = len(closes)
+    if n < 3:
+        return 0.0
+    x_mean = (n - 1) / 2
+    y_mean = sum(closes) / n
+    cov = sum((i - x_mean) * (closes[i] - y_mean) for i in range(n))
+    var_x = sum((i - x_mean) ** 2 for i in range(n))
+    var_y = sum((y - y_mean) ** 2 for y in closes)
+    if var_x == 0 or var_y == 0:
+        return 0.0
+    correlation = cov / (var_x ** 0.5 * var_y ** 0.5)
+    return correlation ** 2
 
 
 TOUCH_TOLERANCE = 0.005          # 0.5% 이내면 "닿음"
@@ -40,10 +59,8 @@ def _evaluate(p1: SwingHigh, p2: SwingHigh, all_swings: list[SwingHigh],
         return None
 
     line_val_now = line_value_at(line, current_idx)
-    # 비현실적: 음수면 제외
     if line_val_now <= 0:
         return None
-    # 현재가가 너무 멀면 reject (50%까지 허용)
     distance_pct = abs(current_close - line_val_now) / line_val_now
     if distance_pct > CFG.MAX_DISTANCE_FROM_LINE_PCT:
         return None
@@ -62,7 +79,10 @@ def _evaluate(p1: SwingHigh, p2: SwingHigh, all_swings: list[SwingHigh],
         elif rel > TOUCH_TOLERANCE:
             above += 1
 
-    # 가까울수록 +, 길수록 + (긴 추세선이 의미 있음)
+    # v4: 추세선 신뢰도 검사
+    if touches < CFG.MIN_TOUCHES:
+        return None  # 2개 점만 우연히 맞춘 라인 거름
+
     proximity_bonus = max(0.0, (0.10 - distance_pct)) * 800
     length_bonus = distance * CFG.LENGTH_BONUS_WEIGHT
     score = (2 + touches) * TOUCH_WEIGHT + length_bonus - above * ABOVE_PENALTY + proximity_bonus
@@ -73,8 +93,15 @@ def _evaluate(p1: SwingHigh, p2: SwingHigh, all_swings: list[SwingHigh],
 
 
 def find_best_trendline(symbol: str, candles: list[Candle]) -> Optional[Trendline]:
-    """모든 swing high 쌍을 평가해 점수 최고인 추세선 1개 반환."""
+    """모든 swing high 쌍을 평가해 점수 최고인 추세선 1개 반환.
+    v4: 추세 강도(R²) 필터 추가 — 횡보 코인 제외."""
     if len(candles) < 2 * CFG.SWING_LOOKBACK + CFG.MIN_SWING_DISTANCE + CFG.MIN_BARS_AFTER_P2:
+        return None
+
+    # v4: 추세 강도 검사 (횡보 코인 제외)
+    closes_recent = [c.close for c in candles[-100:]]
+    r2 = trend_r_squared(closes_recent)
+    if r2 < CFG.MIN_TREND_R2:
         return None
 
     swings = find_swing_highs(candles, CFG.SWING_LOOKBACK)
